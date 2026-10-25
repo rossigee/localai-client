@@ -1,0 +1,5 @@
+module github.com/rossigee/localai-client
+
+go 1.27.1
+
+require golang.org/x/oauth2 v0.24.0

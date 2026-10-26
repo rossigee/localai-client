@@ -3,10 +3,10 @@ package client
 import (
 	"bytes"
 	"context"
-	"errors"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -159,17 +159,17 @@ type MCPServer struct {
 
 // Agent represents a LocalAI agent definition.
 type Agent struct {
-	Name         string      `json:"name"`
-	Model        string      `json:"model"`
-	Description  string      `json:"description,omitempty"`
-	SystemPrompt string      `json:"system_prompt,omitempty"`
+	Name         string `json:"name"`
+	Model        string `json:"model"`
+	Description  string `json:"description,omitempty"`
+	SystemPrompt string `json:"system_prompt,omitempty"`
 	// SelectedSkills is LocalAI's per-agent skill selection. The field is named
 	// selected_skills in the API; a plain "skills" key is ignored server-side.
 	SelectedSkills []string    `json:"selected_skills,omitempty"`
 	EnableSkills   *bool       `json:"enable_skills,omitempty"`
-	MCPServers   []MCPServer `json:"mcp_servers,omitempty"`
-	AllowedTools []string    `json:"allowed_tools,omitempty"`
-	ExcludedTools []string   `json:"excluded_tools,omitempty"`
+	MCPServers     []MCPServer `json:"mcp_servers,omitempty"`
+	AllowedTools   []string    `json:"allowed_tools,omitempty"`
+	ExcludedTools  []string    `json:"excluded_tools,omitempty"`
 	// APIKey is the key the agent uses to call LocalAI's own API. When LocalAI
 	// has authentication enabled it generates a per-user key at creation time,
 	// but only for callers that have a row in the users table. Callers
@@ -233,8 +233,8 @@ func (c *Client) DeleteAgent(ctx context.Context, name string) error {
 
 // Skill represents a LocalAI skill definition.
 type Skill struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 	// Raw holds any extra fields.
 	Raw map[string]any `json:"-"`
 }

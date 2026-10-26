@@ -7,6 +7,8 @@ It covers the parts of the API that a Kubernetes controller needs: agents,
 skills and models, with an API key or OAuth2 bearer token, and optional
 verification against a private CA.
 
+Requires Go 1.27.3 or later.
+
 ## Usage
 
 ```go

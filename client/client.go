@@ -177,6 +177,16 @@ type Agent struct {
 	// be supplied explicitly or creation fails with a user_api_keys foreign key
 	// violation.
 	APIKey string `json:"api_key,omitempty"`
+	// EnableKB turns on the knowledge base for this agent.
+	EnableKB *bool `json:"enable_kb,omitempty"`
+	// KbAsTools exposes the knowledge base as MCP tools.
+	KbAsTools *bool `json:"kb_as_tools,omitempty"`
+	// LongTermMemory enables long-term memory (notes) for this agent.
+	LongTermMemory *bool `json:"long_term_memory,omitempty"`
+	// SummaryLongTermMemory enables summary of long-term memory.
+	SummaryLongTermMemory *bool `json:"summary_long_term_memory,omitempty"`
+	// KbAutoSearch enables automatic KB search.
+	KbAutoSearch *bool `json:"kb_auto_search,omitempty"`
 	// Raw holds any extra fields returned by the API.
 	Raw map[string]any `json:"-"`
 }

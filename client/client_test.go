@@ -178,3 +178,17 @@ func TestServerErrorIsNotNotFound(t *testing.T) {
 		t.Error("IsNotFound = true for a 500 response, want false")
 	}
 }
+
+func TestSkillContentUsesContentKey(t *testing.T) {
+	b, err := json.Marshal(Skill{Name: "golder-test", Content: "instructions"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["content"] != "instructions" {
+		t.Errorf("content = %v, want instructions; body = %s", got["content"], b)
+	}
+}

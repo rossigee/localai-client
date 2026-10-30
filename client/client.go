@@ -245,6 +245,8 @@ func (c *Client) DeleteAgent(ctx context.Context, name string) error {
 type Skill struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	// Content is the skill's instructions, returned and accepted as "content".
+	Content string `json:"content,omitempty"`
 	// Raw holds any extra fields.
 	Raw map[string]any `json:"-"`
 }

@@ -192,3 +192,80 @@ func TestSkillContentUsesContentKey(t *testing.T) {
 		t.Errorf("content = %v, want instructions; body = %s", got["content"], b)
 	}
 }
+
+func TestImportModelSendsConfigVerbatim(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/models/import" {
+			t.Errorf("request = %s %s, want POST /models/import", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["name"] != "zen-qwen3.8-flash" {
+			t.Errorf("name = %v, want zen-qwen3.8-flash", body["name"])
+		}
+		if body["backend"] != "localai-proxy" {
+			t.Errorf("backend = %v, want localai-proxy", body["backend"])
+		}
+		params, ok := body["parameters"].(map[string]any)
+		if !ok || params["model"] != "qwen3.8-flash" {
+			t.Errorf("parameters = %v", body["parameters"])
+		}
+		_, _ = io.WriteString(w, `{"success":true,"message":"Model configuration created successfully","filename":"zen-qwen3.8-flash.yaml","pending_cleanup":0}`)
+	})
+
+	res, err := c.ImportModel(context.Background(), map[string]any{
+		"name":       "zen-qwen3.8-flash",
+		"backend":    "localai-proxy",
+		"parameters": map[string]any{"model": "qwen3.8-flash"},
+	})
+	if err != nil {
+		t.Fatalf("ImportModel: %v", err)
+	}
+	if !res.Success || res.Filename != "zen-qwen3.8-flash.yaml" {
+		t.Errorf("result = %+v, want success with zen-qwen3.8-flash.yaml", res)
+	}
+}
+
+func TestImportModelAsyncJobEnvelope(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"uuid":"job-1","status":"https://localai.example.com/models/jobs/job-1"}`)
+	})
+
+	res, err := c.ImportModel(context.Background(), map[string]any{"name": "m"})
+	if err != nil {
+		t.Fatalf("ImportModel: %v", err)
+	}
+	if res.Success || res.UUID != "job-1" {
+		t.Errorf("result = %+v, want queued job envelope", res)
+	}
+}
+
+func TestDeleteModelPostsToDeletePath(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/models/delete/zen-qwen3.8-flash" {
+			t.Errorf("request = %s %s, want POST /models/delete/zen-qwen3.8-flash", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"uuid":"job-2","status":"https://localai.example.com/models/jobs/job-2","deletion":true,"processed":true,"message":"completed"}`)
+	})
+
+	res, err := c.DeleteModel(context.Background(), "zen-qwen3.8-flash")
+	if err != nil {
+		t.Fatalf("DeleteModel: %v", err)
+	}
+	if !res.Deletion || res.UUID != "job-2" {
+		t.Errorf("result = %+v, want deletion job envelope", res)
+	}
+}
+
+func TestDeleteModelErrorIsNotNotFound(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, "boom")
+	})
+
+	if _, err := c.DeleteModel(context.Background(), "zen-qwen3.8-flash"); err == nil {
+		t.Fatal("expected an error for a 500 response")
+	}
+}

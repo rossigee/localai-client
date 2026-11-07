@@ -315,3 +315,52 @@ func (c *Client) ListModels(ctx context.Context) ([]Model, error) {
 	}
 	return out.Data, nil
 }
+
+// ImportModelResult is the response for POST /models/import. A config with no
+// downloads is written synchronously and answered with Success true. A config
+// that references remote assets (download_files entries, URI-valued
+// model/mmproj) is enqueued on the gallery job queue and answered instead
+// with a job envelope (UUID/Status), like a gallery install.
+type ImportModelResult struct {
+	Success  bool   `json:"success"`
+	Message  string `json:"message"`
+	Filename string `json:"filename"`
+	// UUID and Status are set when the import was queued as a job.
+	UUID   string `json:"uuid"`
+	Status string `json:"status"`
+}
+
+// ImportModel writes a model configuration to LocalAI (POST /models/import).
+// The map is sent verbatim as the config body; LocalAI writes it to
+// /models/<name>.yaml and the model appears in the model list. Re-importing
+// an existing name overwrites its configuration.
+func (c *Client) ImportModel(ctx context.Context, cfg map[string]any) (*ImportModelResult, error) {
+	var out ImportModelResult
+	if err := c.do(ctx, http.MethodPost, "/models/import", cfg, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteModelResult is the job envelope LocalAI returns for asynchronous
+// model operations (delete, or apply of a config that carries downloads).
+type DeleteModelResult struct {
+	UUID               string `json:"uuid"`
+	Status             string `json:"status"`
+	Deletion           bool   `json:"deletion"`
+	Processed          bool   `json:"processed"`
+	Message            string `json:"message"`
+	GalleryElementName string `json:"gallery_element_name"`
+}
+
+// DeleteModel deletes a model from LocalAI (POST /models/delete/{name}).
+// Deletion is asynchronous: LocalAI returns a job envelope and the model
+// disappears from the model list once the job completes. Deleting a model
+// that does not exist also returns a job envelope.
+func (c *Client) DeleteModel(ctx context.Context, name string) (*DeleteModelResult, error) {
+	var out DeleteModelResult
+	if err := c.do(ctx, http.MethodPost, "/models/delete/"+url.PathEscape(name), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}

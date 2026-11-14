@@ -119,7 +119,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &APIError{Method: method, Path: path, StatusCode: resp.StatusCode, Body: string(raw)}
@@ -151,145 +151,179 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
 }
 
-// MCPServer is a remote MCP endpoint attached to an agent.
-type MCPServer struct {
-	URL   string `json:"url"`
-	Token string `json:"token,omitempty"`
+// AgentFolderWrite chooses the folder a saved agent works in.
+type AgentFolderWrite struct {
+	Path string `json:"path"`
+	Mode string `json:"mode,omitempty"`
 }
 
-// Agent represents a LocalAI agent definition.
+// AgentFolder is the folder of an agent as LocalAI reports it.
+type AgentFolder struct {
+	Path  string `json:"path,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Mode  string `json:"mode"`
+	State string `json:"state"`
+}
+
+// AgentWrite is the body that creates or replaces a saved agent.
+type AgentWrite struct {
+	Name         string            `json:"name"`
+	Description  string            `json:"description,omitempty"`
+	Instructions string            `json:"instructions,omitempty"`
+	Model        string            `json:"model,omitempty"`
+	MCPServers   []string          `json:"mcp_servers,omitempty"`
+	Addons       []string          `json:"addons,omitempty"`
+	Collections  []string          `json:"collections,omitempty"`
+	Skills       []string          `json:"skills,omitempty"`
+	Network      string            `json:"network,omitempty"`
+	Folder       *AgentFolderWrite `json:"folder,omitempty"`
+}
+
+// Agent is a saved agent as LocalAI reports it. ID identifies the agent in
+// every later call.
 type Agent struct {
-	Name         string `json:"name"`
-	Model        string `json:"model"`
-	Description  string `json:"description,omitempty"`
-	SystemPrompt string `json:"system_prompt,omitempty"`
-	// SelectedSkills is LocalAI's per-agent skill selection. The field is named
-	// selected_skills in the API; a plain "skills" key is ignored server-side.
-	SelectedSkills []string    `json:"selected_skills,omitempty"`
-	EnableSkills   *bool       `json:"enable_skills,omitempty"`
-	MCPServers     []MCPServer `json:"mcp_servers,omitempty"`
-	AllowedTools   []string    `json:"allowed_tools,omitempty"`
-	ExcludedTools  []string    `json:"excluded_tools,omitempty"`
-	// APIKey is the key the agent uses to call LocalAI's own API. When LocalAI
-	// has authentication enabled it generates a per-user key at creation time,
-	// but only for callers that have a row in the users table. Callers
-	// authenticated with a legacy API key have no such row, so the key has to
-	// be supplied explicitly or creation fails with a user_api_keys foreign key
-	// violation.
-	APIKey string `json:"api_key,omitempty"`
-	// EnableKB turns on the knowledge base for this agent.
-	EnableKB *bool `json:"enable_kb,omitempty"`
-	// KbAsTools exposes the knowledge base as MCP tools.
-	KbAsTools *bool `json:"kb_as_tools,omitempty"`
-	// LongTermMemory enables long-term memory (notes) for this agent.
-	LongTermMemory *bool `json:"long_term_memory,omitempty"`
-	// SummaryLongTermMemory enables summary of long-term memory.
-	SummaryLongTermMemory *bool `json:"summary_long_term_memory,omitempty"`
-	// KbAutoSearch enables automatic KB search.
-	KbAutoSearch *bool `json:"kb_auto_search,omitempty"`
-	// Raw holds any extra fields returned by the API.
-	Raw map[string]any `json:"-"`
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	Description  string       `json:"description"`
+	Instructions string       `json:"instructions"`
+	Model        string       `json:"model,omitempty"`
+	MCPServers   []string     `json:"mcp_servers"`
+	Addons       []string     `json:"addons"`
+	Collections  []string     `json:"collections"`
+	Skills       []string     `json:"skills"`
+	Network      string       `json:"network"`
+	Folder       *AgentFolder `json:"folder,omitempty"`
+	Created      time.Time    `json:"created"`
+	Updated      time.Time    `json:"updated"`
 }
 
-// ListAgents returns all agents.
+// ListAgents returns the saved agents of the API key's user.
 func (c *Client) ListAgents(ctx context.Context) ([]Agent, error) {
-	// The list endpoint returns {"agents": ["name", ...], "agentCount": n}.
 	var resp struct {
-		Agents []string `json:"agents"`
+		Agents []Agent `json:"agents"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/api/agents", nil, &resp); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/chats/agents", nil, &resp); err != nil {
 		return nil, err
 	}
-	out := make([]Agent, 0, len(resp.Agents))
-	for _, name := range resp.Agents {
-		out = append(out, Agent{Name: name})
-	}
-	return out, nil
+	return resp.Agents, nil
 }
 
-// GetAgent returns a single agent.
-func (c *Client) GetAgent(ctx context.Context, name string) (*Agent, error) {
-	// /api/agents/{name} only reports whether the agent is active; the config
-	// lives at /api/agents/{name}/config.
+// GetAgent returns one saved agent by ID.
+func (c *Client) GetAgent(ctx context.Context, id string) (*Agent, error) {
 	var out Agent
-	if err := c.do(ctx, http.MethodGet, "/api/agents/"+url.PathEscape(name)+"/config", nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/chats/agents/"+url.PathEscape(id), nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// CreateAgent creates a new agent.
-func (c *Client) CreateAgent(ctx context.Context, a Agent) (*Agent, error) {
+// CreateAgent saves a new agent.
+func (c *Client) CreateAgent(ctx context.Context, a AgentWrite) (*Agent, error) {
 	var out Agent
-	if err := c.do(ctx, http.MethodPost, "/api/agents", a, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, "/api/chats/agents", a, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// UpdateAgent updates an existing agent.
-func (c *Client) UpdateAgent(ctx context.Context, name string, a Agent) (*Agent, error) {
+// UpdateAgent replaces the saved agent with the given ID.
+func (c *Client) UpdateAgent(ctx context.Context, id string, a AgentWrite) (*Agent, error) {
 	var out Agent
-	if err := c.do(ctx, http.MethodPut, "/api/agents/"+url.PathEscape(name), a, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, "/api/chats/agents/"+url.PathEscape(id), a, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// DeleteAgent deletes an agent.
-func (c *Client) DeleteAgent(ctx context.Context, name string) error {
-	return c.do(ctx, http.MethodDelete, "/api/agents/"+url.PathEscape(name), nil, nil)
+// DeleteAgent deletes the saved agent with the given ID.
+func (c *Client) DeleteAgent(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/api/chats/agents/"+url.PathEscape(id), nil, nil)
 }
 
-// Skill represents a LocalAI skill definition.
+// Skill is one skill in the list, as LocalAI reports it.
 type Skill struct {
 	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	// Content is the skill's instructions, returned and accepted as "content".
-	Content string `json:"content,omitempty"`
-	// Raw holds any extra fields.
-	Raw map[string]any `json:"-"`
+	Description string `json:"description"`
+	Layer       string `json:"layer"`
+	Addon       string `json:"addon,omitempty"`
+	AddonTitle  string `json:"addon_title,omitempty"`
+	Path        string `json:"path"`
+	Enabled     bool   `json:"enabled"`
+	Shadowed    string `json:"shadowed,omitempty"`
+	ShadowedBy  string `json:"shadowed_by,omitempty"`
+	Fallback    string `json:"fallback,omitempty"`
+	Invalid     string `json:"invalid,omitempty"`
+	Editable    bool   `json:"editable"`
 }
 
-// ListSkills returns all skills.
+// SkillDetail is one skill with its text.
+type SkillDetail struct {
+	Name        string `json:"name"`
+	Layer       string `json:"layer"`
+	Description string `json:"description"`
+	Body        string `json:"body"`
+	Editable    bool   `json:"editable"`
+}
+
+// SkillWrite creates a skill. Layer is "personal" or "shared".
+type SkillWrite struct {
+	Layer       string `json:"layer"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Body        string `json:"body"`
+}
+
+// SkillUpdate replaces the description and body of a skill.
+type SkillUpdate struct {
+	Description string `json:"description"`
+	Body        string `json:"body"`
+}
+
+// ListSkills returns the skills the API key's user can see.
 func (c *Client) ListSkills(ctx context.Context) ([]Skill, error) {
-	var out []Skill
-	if err := c.do(ctx, http.MethodGet, "/api/agents/skills", nil, &out); err != nil {
+	var resp struct {
+		Skills []Skill `json:"skills"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/chats/skills", nil, &resp); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return resp.Skills, nil
 }
 
-// GetSkill returns a single skill.
-func (c *Client) GetSkill(ctx context.Context, name string) (*Skill, error) {
-	var out Skill
-	if err := c.do(ctx, http.MethodGet, "/api/agents/skills/"+url.PathEscape(name), nil, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// CreateSkill creates a new skill.
-func (c *Client) CreateSkill(ctx context.Context, s Skill) (*Skill, error) {
-	var out Skill
-	if err := c.do(ctx, http.MethodPost, "/api/agents/skills", s, &out); err != nil {
+// GetSkill returns one skill with its text. Layer is "personal" or "shared".
+func (c *Client) GetSkill(ctx context.Context, layer, name string) (*SkillDetail, error) {
+	var out SkillDetail
+	if err := c.do(ctx, http.MethodGet, skillPath(layer, name), nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// UpdateSkill updates an existing skill.
-func (c *Client) UpdateSkill(ctx context.Context, name string, s Skill) (*Skill, error) {
-	var out Skill
-	if err := c.do(ctx, http.MethodPut, "/api/agents/skills/"+url.PathEscape(name), s, &out); err != nil {
+// CreateSkill saves a new skill.
+func (c *Client) CreateSkill(ctx context.Context, s SkillWrite) (*SkillDetail, error) {
+	var out SkillDetail
+	if err := c.do(ctx, http.MethodPost, "/api/chats/skills", s, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateSkill replaces the description and body of a skill.
+func (c *Client) UpdateSkill(ctx context.Context, layer, name string, s SkillUpdate) (*SkillDetail, error) {
+	var out SkillDetail
+	if err := c.do(ctx, http.MethodPut, skillPath(layer, name), s, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 // DeleteSkill deletes a skill.
-func (c *Client) DeleteSkill(ctx context.Context, name string) error {
-	return c.do(ctx, http.MethodDelete, "/api/agents/skills/"+url.PathEscape(name), nil, nil)
+func (c *Client) DeleteSkill(ctx context.Context, layer, name string) error {
+	return c.do(ctx, http.MethodDelete, skillPath(layer, name), nil, nil)
+}
+
+func skillPath(layer, name string) string {
+	return "/api/chats/skills/" + url.PathEscape(layer) + "/" + url.PathEscape(name)
 }
 
 // Ping checks connectivity.

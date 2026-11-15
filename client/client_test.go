@@ -349,3 +349,40 @@ func TestSetModelPinnedPutsActionPath(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyModelFromGallerySendsEntryAndName(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/models/apply" {
+			t.Errorf("request = %s %s, want POST /models/apply", r.Method, r.URL.Path)
+		}
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["id"] != "qwen3-8b" || body["name"] != "zen" || body["variant"] != "" {
+			t.Errorf("body = %v", body)
+		}
+		_, _ = io.WriteString(w, `{"id":"job-1","status_url":"https://localai.example/models/jobs/job-1"}`)
+	})
+	out, err := c.ApplyModelFromGallery(context.Background(), GalleryApplyRequest{ID: "qwen3-8b", Name: "zen"})
+	if err != nil {
+		t.Fatalf("ApplyModelFromGallery: %v", err)
+	}
+	if out.ID != "job-1" {
+		t.Errorf("job ID = %q, want job-1", out.ID)
+	}
+}
+
+func TestGetModelJobReadsStatus(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/models/jobs/job-1" {
+			t.Errorf("request = %s %s, want GET /models/jobs/job-1", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"processed":true,"progress":100,"message":"done","error":"disk full"}`)
+	})
+	st, err := c.GetModelJob(context.Background(), "job-1")
+	if err != nil {
+		t.Fatalf("GetModelJob: %v", err)
+	}
+	if !st.Processed || st.Error != "disk full" {
+		t.Errorf("status = %+v, want processed with error", st)
+	}
+}

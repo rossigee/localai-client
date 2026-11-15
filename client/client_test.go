@@ -249,3 +249,53 @@ func TestUpdateSkillPutsDescriptionAndBody(t *testing.T) {
 		t.Fatalf("UpdateSkill: %v", err)
 	}
 }
+
+func TestListCollectionsReadsNames(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/collections" {
+			t.Errorf("request = %s %s, want GET /api/collections", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"collections":["docs","runbooks"],"count":2}`)
+	})
+	names, err := c.ListCollections(context.Background())
+	if err != nil {
+		t.Fatalf("ListCollections: %v", err)
+	}
+	if len(names) != 2 || names[0] != "docs" {
+		t.Errorf("names = %v, want docs and runbooks", names)
+	}
+}
+
+func TestAddCollectionSourceSendsURLAndInterval(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/collections/docs/sources" {
+			t.Errorf("request = %s %s, want POST /api/collections/docs/sources", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["url"] != "https://example.com/a" || body["update_interval"] != float64(60) {
+			t.Errorf("body = %v", body)
+		}
+		_, _ = io.WriteString(w, `{"status":"ok"}`)
+	})
+	if _, err := c.AddCollectionSource(context.Background(), "docs", "https://example.com/a", 60); err != nil {
+		t.Fatalf("AddCollectionSource: %v", err)
+	}
+}
+
+func TestRemoveCollectionSourceDeletesWithURLBody(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/collections/docs/sources" {
+			t.Errorf("request = %s %s, want DELETE /api/collections/docs/sources", r.Method, r.URL.Path)
+		}
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["url"] != "https://example.com/a" {
+			t.Errorf("body = %v", body)
+		}
+		_, _ = io.WriteString(w, `{"status":"ok"}`)
+	})
+	if _, err := c.RemoveCollectionSource(context.Background(), "docs", "https://example.com/a"); err != nil {
+		t.Fatalf("RemoveCollectionSource: %v", err)
+	}
+}

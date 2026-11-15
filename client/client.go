@@ -326,6 +326,74 @@ func skillPath(layer, name string) string {
 	return "/api/chats/skills/" + url.PathEscape(layer) + "/" + url.PathEscape(name)
 }
 
+// CollectionStatus is LocalAI's answer to a collection write.
+type CollectionStatus struct {
+	Status string `json:"status"`
+	Name   string `json:"name,omitempty"`
+}
+
+// CollectionSource is one URL a collection follows.
+type CollectionSource struct {
+	URL            string `json:"url"`
+	UpdateInterval int    `json:"update_interval"`
+	LastUpdate     string `json:"last_update"`
+}
+
+// ListCollections returns the names of the collections the API key's user can
+// see.
+func (c *Client) ListCollections(ctx context.Context) ([]string, error) {
+	var resp struct {
+		Collections []string `json:"collections"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/collections", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Collections, nil
+}
+
+// CreateCollection creates a collection with the given name.
+func (c *Client) CreateCollection(ctx context.Context, name string) (*CollectionStatus, error) {
+	var out CollectionStatus
+	if err := c.do(ctx, http.MethodPost, "/api/collections", map[string]string{"name": name}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListCollectionSources returns the URLs a collection follows.
+func (c *Client) ListCollectionSources(ctx context.Context, name string) ([]CollectionSource, error) {
+	var resp struct {
+		Sources []CollectionSource `json:"sources"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/collections/"+url.PathEscape(name)+"/sources", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Sources, nil
+}
+
+// AddCollectionSource makes a collection follow a URL. The interval is in
+// minutes; zero leaves LocalAI's default in place.
+func (c *Client) AddCollectionSource(ctx context.Context, name, sourceURL string, intervalMinutes int) (*CollectionStatus, error) {
+	body := map[string]any{"url": sourceURL}
+	if intervalMinutes != 0 {
+		body["update_interval"] = intervalMinutes
+	}
+	var out CollectionStatus
+	if err := c.do(ctx, http.MethodPost, "/api/collections/"+url.PathEscape(name)+"/sources", body, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// RemoveCollectionSource stops a collection following a URL.
+func (c *Client) RemoveCollectionSource(ctx context.Context, name, sourceURL string) (*CollectionStatus, error) {
+	var out CollectionStatus
+	if err := c.do(ctx, http.MethodDelete, "/api/collections/"+url.PathEscape(name)+"/sources", map[string]string{"url": sourceURL}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.ListAgents(ctx)

@@ -474,6 +474,63 @@ func (c *Client) GetModelJob(ctx context.Context, uuid string) (*ModelJobStatus,
 	return &out, nil
 }
 
+// AgentTaskWrite is the body that creates or replaces an agent task. A task is
+// a saved prompt template run by a model, or by an agent. Cron, multimedia
+// sources and webhooks are not part of this body.
+type AgentTaskWrite struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Model       string `json:"model,omitempty"`
+	AgentID     string `json:"agent_id,omitempty"`
+	Prompt      string `json:"prompt"`
+	// Enabled, when nil, is left to LocalAI's default, which is enabled.
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
+// AgentTask is a saved agent task as LocalAI reports it.
+type AgentTask struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Model       string    `json:"model"`
+	AgentID     string    `json:"agent_id,omitempty"`
+	Prompt      string    `json:"prompt"`
+	Enabled     *bool     `json:"enabled,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// CreateAgentTask saves a new task and returns its ID.
+func (c *Client) CreateAgentTask(ctx context.Context, task AgentTaskWrite) (string, error) {
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/agent/tasks", task, &out); err != nil {
+		return "", err
+	}
+	return out.ID, nil
+}
+
+// GetAgentTask returns one saved task by ID.
+func (c *Client) GetAgentTask(ctx context.Context, id string) (*AgentTask, error) {
+	var out AgentTask
+	if err := c.do(ctx, http.MethodGet, "/api/agent/tasks/"+url.PathEscape(id), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateAgentTask replaces every field of a saved task.
+func (c *Client) UpdateAgentTask(ctx context.Context, id string, task AgentTaskWrite) error {
+	return c.do(ctx, http.MethodPut, "/api/agent/tasks/"+url.PathEscape(id), task, nil)
+}
+
+// DeleteAgentTask deletes a saved task. Its past jobs stay until their retention
+// passes.
+func (c *Client) DeleteAgentTask(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/api/agent/tasks/"+url.PathEscape(id), nil, nil)
+}
+
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.ListAgents(ctx)

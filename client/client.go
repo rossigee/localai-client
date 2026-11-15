@@ -430,6 +430,50 @@ func (c *Client) SetModelPinned(ctx context.Context, name string, pinned bool) e
 	return c.do(ctx, http.MethodPut, "/models/toggle-pinned/"+url.PathEscape(name)+"/"+action, nil, nil)
 }
 
+// GalleryApplyRequest installs a model from a gallery entry.
+type GalleryApplyRequest struct {
+	// ID is the gallery entry's name.
+	ID string `json:"id"`
+	// Variant names one build of an entry that declares variants. Empty lets
+	// LocalAI pick one.
+	Variant string `json:"variant,omitempty"`
+	// Name is the name the model is installed under. Empty uses the entry's name.
+	Name string `json:"name,omitempty"`
+}
+
+// GalleryResponse is LocalAI's answer to an install: the job to poll.
+type GalleryResponse struct {
+	ID        string `json:"id"`
+	StatusURL string `json:"status_url"`
+}
+
+// ModelJobStatus is the progress of a gallery install.
+type ModelJobStatus struct {
+	Processed bool    `json:"processed"`
+	Cancelled bool    `json:"cancelled"`
+	Progress  float64 `json:"progress"`
+	Message   string  `json:"message"`
+	Error     string  `json:"error,omitempty"`
+}
+
+// ApplyModelFromGallery starts installing a model from a gallery entry.
+func (c *Client) ApplyModelFromGallery(ctx context.Context, req GalleryApplyRequest) (*GalleryResponse, error) {
+	var out GalleryResponse
+	if err := c.do(ctx, http.MethodPost, "/models/apply", req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetModelJob returns the status of a gallery install job.
+func (c *Client) GetModelJob(ctx context.Context, uuid string) (*ModelJobStatus, error) {
+	var out ModelJobStatus
+	if err := c.do(ctx, http.MethodGet, "/models/jobs/"+url.PathEscape(uuid), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.ListAgents(ctx)

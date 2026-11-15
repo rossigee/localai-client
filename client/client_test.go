@@ -386,3 +386,65 @@ func TestGetModelJobReadsStatus(t *testing.T) {
 		t.Errorf("status = %+v, want processed with error", st)
 	}
 }
+
+func TestCreateAgentTaskReturnsID(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/agent/tasks" {
+			t.Errorf("request = %s %s, want POST /api/agent/tasks", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["name"] != "digest" || body["prompt"] != "Summarise the inbox" {
+			t.Errorf("body = %v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"id":"t1"}`)
+	})
+	id, err := c.CreateAgentTask(context.Background(), AgentTaskWrite{Name: "digest", Prompt: "Summarise the inbox"})
+	if err != nil {
+		t.Fatalf("CreateAgentTask: %v", err)
+	}
+	if id != "t1" {
+		t.Errorf("id = %q, want t1", id)
+	}
+}
+
+func TestGetAgentTaskReadsFields(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/agent/tasks/t1" {
+			t.Errorf("request = %s %s, want GET /api/agent/tasks/t1", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"id":"t1","name":"digest","description":"","model":"m1","prompt":"p","enabled":false,"created_at":"2026-11-15T00:00:00Z","updated_at":"2026-11-15T00:00:00Z"}`)
+	})
+	task, err := c.GetAgentTask(context.Background(), "t1")
+	if err != nil {
+		t.Fatalf("GetAgentTask: %v", err)
+	}
+	if task.Name != "digest" || task.Enabled == nil || *task.Enabled {
+		t.Errorf("task = %+v, want digest disabled", task)
+	}
+}
+
+func TestUpdateAgentTaskPutsFullBody(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut || r.URL.Path != "/api/agent/tasks/t1" {
+			t.Errorf("request = %s %s, want PUT /api/agent/tasks/t1", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"message":"Task updated"}`)
+	})
+	if err := c.UpdateAgentTask(context.Background(), "t1", AgentTaskWrite{Name: "digest", Prompt: "p"}); err != nil {
+		t.Fatalf("UpdateAgentTask: %v", err)
+	}
+}
+
+func TestDeleteAgentTaskUsesIDPath(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete || r.URL.Path != "/api/agent/tasks/t1" {
+			t.Errorf("request = %s %s, want DELETE /api/agent/tasks/t1", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"message":"Task deleted"}`)
+	})
+	if err := c.DeleteAgentTask(context.Background(), "t1"); err != nil {
+		t.Fatalf("DeleteAgentTask: %v", err)
+	}
+}

@@ -394,6 +394,42 @@ func (c *Client) RemoveCollectionSource(ctx context.Context, name, sourceURL str
 	return &out, nil
 }
 
+// ModelCapability is one installed model's state as LocalAI reports it.
+type ModelCapability struct {
+	ID       string `json:"id"`
+	Disabled bool   `json:"disabled"`
+	Pinned   bool   `json:"pinned"`
+}
+
+// ListModelCapabilities returns the state of every installed model.
+func (c *Client) ListModelCapabilities(ctx context.Context) ([]ModelCapability, error) {
+	var resp struct {
+		Data []ModelCapability `json:"data"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/api/models/capabilities", nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// SetModelEnabled enables or disables an installed model.
+func (c *Client) SetModelEnabled(ctx context.Context, name string, enabled bool) error {
+	action := "disable"
+	if enabled {
+		action = "enable"
+	}
+	return c.do(ctx, http.MethodPut, "/models/toggle-state/"+url.PathEscape(name)+"/"+action, nil, nil)
+}
+
+// SetModelPinned pins or unpins an installed model.
+func (c *Client) SetModelPinned(ctx context.Context, name string, pinned bool) error {
+	action := "unpin"
+	if pinned {
+		action = "pin"
+	}
+	return c.do(ctx, http.MethodPut, "/models/toggle-pinned/"+url.PathEscape(name)+"/"+action, nil, nil)
+}
+
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.ListAgents(ctx)

@@ -299,3 +299,53 @@ func TestRemoveCollectionSourceDeletesWithURLBody(t *testing.T) {
 		t.Fatalf("RemoveCollectionSource: %v", err)
 	}
 }
+
+func TestListModelCapabilitiesReadsDataEnvelope(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/models/capabilities" {
+			t.Errorf("request = %s %s, want GET /api/models/capabilities", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"data":[{"id":"m1","disabled":true,"pinned":false}]}`)
+	})
+	caps, err := c.ListModelCapabilities(context.Background())
+	if err != nil {
+		t.Fatalf("ListModelCapabilities: %v", err)
+	}
+	if len(caps) != 1 || caps[0].ID != "m1" || !caps[0].Disabled || caps[0].Pinned {
+		t.Errorf("caps = %+v, want m1 disabled and not pinned", caps)
+	}
+}
+
+func TestSetModelEnabledPutsActionPath(t *testing.T) {
+	for _, tc := range []struct {
+		enabled bool
+		want    string
+	}{{true, "/models/toggle-state/zen/enable"}, {false, "/models/toggle-state/zen/disable"}} {
+		c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPut || r.URL.Path != tc.want {
+				t.Errorf("request = %s %s, want PUT %s", r.Method, r.URL.Path, tc.want)
+			}
+			_, _ = io.WriteString(w, `{"success":true}`)
+		})
+		if err := c.SetModelEnabled(context.Background(), "zen", tc.enabled); err != nil {
+			t.Fatalf("SetModelEnabled(%v): %v", tc.enabled, err)
+		}
+	}
+}
+
+func TestSetModelPinnedPutsActionPath(t *testing.T) {
+	for _, tc := range []struct {
+		pinned bool
+		want   string
+	}{{true, "/models/toggle-pinned/zen/pin"}, {false, "/models/toggle-pinned/zen/unpin"}} {
+		c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPut || r.URL.Path != tc.want {
+				t.Errorf("request = %s %s, want PUT %s", r.Method, r.URL.Path, tc.want)
+			}
+			_, _ = io.WriteString(w, `{"success":true}`)
+		})
+		if err := c.SetModelPinned(context.Background(), "zen", tc.pinned); err != nil {
+			t.Fatalf("SetModelPinned(%v): %v", tc.pinned, err)
+		}
+	}
+}

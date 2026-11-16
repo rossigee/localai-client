@@ -508,3 +508,74 @@ func TestUpdateAndDeleteTriggerUseIDPath(t *testing.T) {
 		t.Fatalf("DeleteTrigger: %v", err)
 	}
 }
+
+func TestListBackendsReadsEveryPage(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/backends" {
+			t.Errorf("path = %s, want /api/backends", r.URL.Path)
+		}
+		if r.URL.Query().Get("term") != "llama-cpp" {
+			t.Errorf("term = %q, want llama-cpp", r.URL.Query().Get("term"))
+		}
+		if r.URL.Query().Get("page") == "2" {
+			_, _ = io.WriteString(w, `{"backends":[{"id":"b2","name":"llama-cpp-2","installed":false}],"totalPages":2}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"backends":[{"id":"b1","name":"llama-cpp","gallery":"localai","installed":true}],"totalPages":2}`)
+	})
+	entries, err := c.ListBackends(context.Background(), "llama-cpp")
+	if err != nil {
+		t.Fatalf("ListBackends: %v", err)
+	}
+	if len(entries) != 2 || entries[0].Name != "llama-cpp" || !entries[0].Installed {
+		t.Errorf("entries = %+v, want both pages with llama-cpp installed", entries)
+	}
+}
+
+func TestInstallBackendPostsNameAndReturnsJob(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/backends/install/llama-cpp" {
+			t.Errorf("request = %s %s, want POST /api/backends/install/llama-cpp", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"jobID":"job-1","message":"Backend installation started"}`)
+	})
+	job, err := c.InstallBackend(context.Background(), "llama-cpp")
+	if err != nil {
+		t.Fatalf("InstallBackend: %v", err)
+	}
+	if job != "job-1" {
+		t.Errorf("job = %q, want job-1", job)
+	}
+}
+
+func TestDeleteBackendPostsNameAndReturnsJob(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/backends/delete/llama-cpp" {
+			t.Errorf("request = %s %s, want POST /api/backends/delete/llama-cpp", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"jobID":"job-2"}`)
+	})
+	job, err := c.DeleteBackend(context.Background(), "llama-cpp")
+	if err != nil {
+		t.Fatalf("DeleteBackend: %v", err)
+	}
+	if job != "job-2" {
+		t.Errorf("job = %q, want job-2", job)
+	}
+}
+
+func TestGetBackendJobReadsError(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/backends/job/job-1" {
+			t.Errorf("path = %s, want /api/backends/job/job-1", r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"processed":true,"deletion":false,"queued":false,"progress":100,"message":"done","error":"disk full"}`)
+	})
+	st, err := c.GetBackendJob(context.Background(), "job-1")
+	if err != nil {
+		t.Fatalf("GetBackendJob: %v", err)
+	}
+	if !st.Processed || st.Error != "disk full" {
+		t.Errorf("status = %+v, want processed with error", st)
+	}
+}

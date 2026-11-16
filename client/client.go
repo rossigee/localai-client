@@ -596,6 +596,81 @@ func (c *Client) DeleteTrigger(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/api/chats/triggers/"+url.PathEscape(id), nil, nil)
 }
 
+// BackendEntry is one backend in the gallery listing, with its install state.
+type BackendEntry struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Gallery    string `json:"gallery"`
+	Installed  bool   `json:"installed"`
+	Processing bool   `json:"processing"`
+	JobID      string `json:"jobID"`
+}
+
+// BackendJob is the progress of a backend install or delete job.
+type BackendJob struct {
+	Progress  float64 `json:"progress"`
+	Message   string  `json:"message"`
+	Processed bool    `json:"processed"`
+	Deletion  bool    `json:"deletion"`
+	Queued    bool    `json:"queued"`
+	Error     string  `json:"error,omitempty"`
+}
+
+// ListBackends returns the backends whose names match term, across every
+// page of the gallery listing. An empty term lists all of them.
+func (c *Client) ListBackends(ctx context.Context, term string) ([]BackendEntry, error) {
+	var out []BackendEntry
+	for page := 1; ; page++ {
+		var resp struct {
+			Backends   []BackendEntry `json:"backends"`
+			TotalPages int            `json:"totalPages"`
+		}
+		path := "/api/backends?items=100&page=" + fmt.Sprint(page)
+		if term != "" {
+			path += "&term=" + url.QueryEscape(term)
+		}
+		if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+			return nil, err
+		}
+		out = append(out, resp.Backends...)
+		if page >= resp.TotalPages || len(resp.Backends) == 0 {
+			return out, nil
+		}
+	}
+}
+
+// InstallBackend starts installing a backend from the galleries and returns the
+// job ID to poll.
+func (c *Client) InstallBackend(ctx context.Context, name string) (string, error) {
+	var out struct {
+		JobID string `json:"jobID"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/backends/install/"+url.PathEscape(name), nil, &out); err != nil {
+		return "", err
+	}
+	return out.JobID, nil
+}
+
+// DeleteBackend starts deleting an installed backend and returns the job ID.
+func (c *Client) DeleteBackend(ctx context.Context, name string) (string, error) {
+	var out struct {
+		JobID string `json:"jobID"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/api/backends/delete/"+url.PathEscape(name), nil, &out); err != nil {
+		return "", err
+	}
+	return out.JobID, nil
+}
+
+// GetBackendJob returns the status of a backend install or delete job.
+func (c *Client) GetBackendJob(ctx context.Context, jobID string) (*BackendJob, error) {
+	var out BackendJob
+	if err := c.do(ctx, http.MethodGet, "/api/backends/job/"+url.PathEscape(jobID), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.ListAgents(ctx)

@@ -531,6 +531,71 @@ func (c *Client) DeleteAgentTask(ctx context.Context, id string) error {
 	return c.do(ctx, http.MethodDelete, "/api/agent/tasks/"+url.PathEscape(id), nil, nil)
 }
 
+// TriggerWrite is the body that creates or replaces a chat trigger. A trigger
+// runs a prompt on a schedule, through a saved agent or a model.
+type TriggerWrite struct {
+	Name   string `json:"name"`
+	Prompt string `json:"prompt"`
+	// Kind is the trigger kind. "schedule" runs on Schedule.
+	Kind string `json:"kind"`
+	// Schedule is a LocalAI schedule expression, such as "daily 08:00".
+	Schedule string `json:"schedule,omitempty"`
+	TimeZone string `json:"time_zone,omitempty"`
+	// DailyCap limits runs per day. Zero leaves LocalAI's default.
+	DailyCap int    `json:"daily_cap,omitempty"`
+	Enabled  bool   `json:"enabled"`
+	AgentID  string `json:"agent_id,omitempty"`
+	Model    string `json:"model,omitempty"`
+}
+
+// Trigger is a chat trigger as LocalAI reports it.
+type Trigger struct {
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Prompt   string     `json:"prompt"`
+	Kind     string     `json:"kind"`
+	Schedule string     `json:"schedule,omitempty"`
+	TimeZone string     `json:"time_zone,omitempty"`
+	DailyCap int        `json:"daily_cap"`
+	Enabled  bool       `json:"enabled"`
+	AgentID  string     `json:"agent_id,omitempty"`
+	Model    string     `json:"model,omitempty"`
+	Summary  string     `json:"summary"`
+	NextRun  *time.Time `json:"next_run,omitempty"`
+}
+
+// CreateTrigger creates a trigger and returns it.
+func (c *Client) CreateTrigger(ctx context.Context, tr TriggerWrite) (*Trigger, error) {
+	var out Trigger
+	if err := c.do(ctx, http.MethodPost, "/api/chats/triggers", tr, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetTrigger returns one trigger by ID.
+func (c *Client) GetTrigger(ctx context.Context, id string) (*Trigger, error) {
+	var out Trigger
+	if err := c.do(ctx, http.MethodGet, "/api/chats/triggers/"+url.PathEscape(id), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// UpdateTrigger replaces a trigger and returns it.
+func (c *Client) UpdateTrigger(ctx context.Context, id string, tr TriggerWrite) (*Trigger, error) {
+	var out Trigger
+	if err := c.do(ctx, http.MethodPut, "/api/chats/triggers/"+url.PathEscape(id), tr, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteTrigger deletes a trigger.
+func (c *Client) DeleteTrigger(ctx context.Context, id string) error {
+	return c.do(ctx, http.MethodDelete, "/api/chats/triggers/"+url.PathEscape(id), nil, nil)
+}
+
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
 	_, err := c.ListAgents(ctx)

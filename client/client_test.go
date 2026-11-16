@@ -448,3 +448,63 @@ func TestDeleteAgentTaskUsesIDPath(t *testing.T) {
 		t.Fatalf("DeleteAgentTask: %v", err)
 	}
 }
+
+func TestCreateTriggerSendsScheduleAndReturnsTrigger(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/chats/triggers" {
+			t.Errorf("request = %s %s, want POST /api/chats/triggers", r.Method, r.URL.Path)
+		}
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["kind"] != "schedule" || body["schedule"] != "daily 08:00" || body["enabled"] != true {
+			t.Errorf("body = %v", body)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"id":"tr1","name":"digest","prompt":"p","kind":"schedule","schedule":"daily 08:00","enabled":true,"summary":"daily"}`)
+	})
+	out, err := c.CreateTrigger(context.Background(), TriggerWrite{Name: "digest", Prompt: "p", Kind: "schedule", Schedule: "daily 08:00", Enabled: true})
+	if err != nil {
+		t.Fatalf("CreateTrigger: %v", err)
+	}
+	if out.ID != "tr1" {
+		t.Errorf("ID = %q, want tr1", out.ID)
+	}
+}
+
+func TestGetTriggerUsesIDPath(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/chats/triggers/tr1" {
+			t.Errorf("request = %s %s, want GET /api/chats/triggers/tr1", r.Method, r.URL.Path)
+		}
+		_, _ = io.WriteString(w, `{"id":"tr1","name":"digest","kind":"schedule","schedule":"daily 08:00","enabled":false}`)
+	})
+	out, err := c.GetTrigger(context.Background(), "tr1")
+	if err != nil {
+		t.Fatalf("GetTrigger: %v", err)
+	}
+	if out.Enabled {
+		t.Errorf("enabled = true, want false")
+	}
+}
+
+func TestUpdateAndDeleteTriggerUseIDPath(t *testing.T) {
+	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/chats/triggers/tr1" {
+			t.Errorf("path = %s, want /api/chats/triggers/tr1", r.URL.Path)
+		}
+		switch r.Method {
+		case http.MethodPut:
+			_, _ = io.WriteString(w, `{"id":"tr1","name":"digest","kind":"schedule","enabled":true}`)
+		case http.MethodDelete:
+			_, _ = io.WriteString(w, `{"message":"deleted"}`)
+		default:
+			t.Errorf("method = %s", r.Method)
+		}
+	})
+	if _, err := c.UpdateTrigger(context.Background(), "tr1", TriggerWrite{Name: "digest", Kind: "schedule", Enabled: true}); err != nil {
+		t.Fatalf("UpdateTrigger: %v", err)
+	}
+	if err := c.DeleteTrigger(context.Background(), "tr1"); err != nil {
+		t.Fatalf("DeleteTrigger: %v", err)
+	}
+}

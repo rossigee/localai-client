@@ -26,8 +26,8 @@ type ProjectAttached struct {
 
 // ProjectWrite is the body that creates or replaces a project.
 type ProjectWrite struct {
-	Name        string          `json:"name"`
-	Description string          `json:"description,omitempty"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
 	Defaults    *ProjectDefaults `json:"defaults,omitempty"`
 	Attached    *ProjectAttached `json:"attached,omitempty"`
 }
@@ -38,22 +38,34 @@ type Project struct {
 	Slug        string           `json:"slug,omitempty"`
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
-	Defaults    *ProjectDefaults  `json:"defaults,omitempty"`
-	Attached    *ProjectAttached  `json:"attached,omitempty"`
+	Defaults    *ProjectDefaults `json:"defaults,omitempty"`
+	Attached    *ProjectAttached `json:"attached,omitempty"`
 	ChatCount   int              `json:"chat_count,omitempty"`
 	Status      string           `json:"status,omitempty"`
 	Archived    bool             `json:"archived,omitempty"`
+	Owner       string           `json:"owner,omitempty"`
 }
 
-// ListProjects returns all projects of the API key's user.
-func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
+func projectPath(path, userID string) string {
+	if userID == "" {
+		return path
+	}
+	v := url.Values{}
+	v.Set("user_id", userID)
+	return path + "?" + v.Encode()
+}
+
+// ListProjects returns all projects of the API key's user. When userID is set,
+// an administrator-scoped request is made on behalf of that user.
+func (c *Client) ListProjects(ctx context.Context, userID string) ([]Project, error) {
 	var out []Project
-	if err := c.do(ctx, http.MethodGet, "/api/chats/projects", nil, &out); err != nil {
+	path := projectPath("/api/chats/projects", userID)
+	if err := c.do(ctx, http.MethodGet, path, nil, &out); err != nil {
 		// Some endpoints wrap in an object
 		var wrapped struct {
 			Projects []Project `json:"projects"`
 		}
-		if err2 := c.do(ctx, http.MethodGet, "/api/chats/projects", nil, &wrapped); err2 != nil {
+		if err2 := c.do(ctx, http.MethodGet, path, nil, &wrapped); err2 != nil {
 			return nil, err
 		}
 		return wrapped.Projects, nil
@@ -62,43 +74,43 @@ func (c *Client) ListProjects(ctx context.Context) ([]Project, error) {
 }
 
 // GetProject returns a single project by id (slug).
-func (c *Client) GetProject(ctx context.Context, id string) (*Project, error) {
+func (c *Client) GetProject(ctx context.Context, id, userID string) (*Project, error) {
 	var out Project
-	if err := c.do(ctx, http.MethodGet, "/api/chats/projects/"+url.PathEscape(id), nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, projectPath("/api/chats/projects/"+url.PathEscape(id), userID), nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 // CreateProject creates a new project.
-func (c *Client) CreateProject(ctx context.Context, p ProjectWrite) (*Project, error) {
+func (c *Client) CreateProject(ctx context.Context, p ProjectWrite, userID string) (*Project, error) {
 	var out Project
-	if err := c.do(ctx, http.MethodPost, "/api/chats/projects", p, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, projectPath("/api/chats/projects", userID), p, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 // UpdateProject updates an existing project (PATCH).
-func (c *Client) UpdateProject(ctx context.Context, id string, p ProjectWrite) (*Project, error) {
+func (c *Client) UpdateProject(ctx context.Context, id string, p ProjectWrite, userID string) (*Project, error) {
 	var out Project
-	if err := c.do(ctx, http.MethodPatch, "/api/chats/projects/"+url.PathEscape(id), p, &out); err != nil {
+	if err := c.do(ctx, http.MethodPatch, projectPath("/api/chats/projects/"+url.PathEscape(id), userID), p, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
 // DeleteProject deletes a project.
-func (c *Client) DeleteProject(ctx context.Context, id string) error {
-	return c.do(ctx, http.MethodDelete, "/api/chats/projects/"+url.PathEscape(id), nil, nil)
+func (c *Client) DeleteProject(ctx context.Context, id, userID string) error {
+	return c.do(ctx, http.MethodDelete, projectPath("/api/chats/projects/"+url.PathEscape(id), userID), nil, nil)
 }
 
 // ArchiveProject archives a project.
-func (c *Client) ArchiveProject(ctx context.Context, id string) error {
-	return c.do(ctx, http.MethodPost, "/api/chats/projects/"+url.PathEscape(id)+"/archive", nil, nil)
+func (c *Client) ArchiveProject(ctx context.Context, id, userID string) error {
+	return c.do(ctx, http.MethodPost, projectPath("/api/chats/projects/"+url.PathEscape(id)+"/archive", userID), nil, nil)
 }
 
 // RestoreProject restores an archived project.
-func (c *Client) RestoreProject(ctx context.Context, id string) error {
-	return c.do(ctx, http.MethodPost, "/api/chats/projects/"+url.PathEscape(id)+"/restore", nil, nil)
+func (c *Client) RestoreProject(ctx context.Context, id, userID string) error {
+	return c.do(ctx, http.MethodPost, projectPath("/api/chats/projects/"+url.PathEscape(id)+"/restore", userID), nil, nil)
 }

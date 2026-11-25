@@ -24,12 +24,24 @@ type ProjectAttached struct {
 	Collections []string `json:"collections,omitempty"`
 }
 
+// ProjectAccessGrant gives an OIDC group access to a project.
+type ProjectAccessGrant struct {
+	Name string `json:"name"`
+	Mode string `json:"mode,omitempty"` // read or write
+}
+
+// ProjectAccess declares access grants for a project.
+type ProjectAccess struct {
+	Groups []ProjectAccessGrant `json:"groups,omitempty"`
+}
+
 // ProjectWrite is the body that creates or replaces a project.
 type ProjectWrite struct {
 	Name        string           `json:"name"`
 	Description string           `json:"description,omitempty"`
 	Defaults    *ProjectDefaults `json:"defaults,omitempty"`
 	Attached    *ProjectAttached `json:"attached,omitempty"`
+	Access      *ProjectAccess   `json:"access,omitempty"`
 }
 
 // Project is a project as LocalAI reports it.
@@ -40,6 +52,7 @@ type Project struct {
 	Description string           `json:"description,omitempty"`
 	Defaults    *ProjectDefaults `json:"defaults,omitempty"`
 	Attached    *ProjectAttached `json:"attached,omitempty"`
+	Access      *ProjectAccess   `json:"access,omitempty"`
 	ChatCount   int              `json:"chat_count,omitempty"`
 	Status      string           `json:"status,omitempty"`
 	Archived    bool             `json:"archived,omitempty"`

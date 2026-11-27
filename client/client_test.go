@@ -50,7 +50,7 @@ func TestIsNotFound(t *testing.T) {
 		_, _ = io.WriteString(w, "not found")
 	})
 
-	_, err := c.GetAgent(context.Background(), "missing")
+	_, err := c.GetAgent(context.Background(), "missing", "")
 	if err == nil {
 		t.Fatal("expected an error for a 404 response")
 	}
@@ -76,7 +76,7 @@ func TestServerErrorIsNotNotFound(t *testing.T) {
 		_, _ = io.WriteString(w, "boom")
 	})
 
-	_, err := c.GetAgent(context.Background(), "bookkeeping")
+	_, err := c.GetAgent(context.Background(), "bookkeeping", "")
 	if err == nil {
 		t.Fatal("expected an error for a 500 response")
 	}
@@ -169,7 +169,7 @@ func TestListAgentsReadsChatsEnvelope(t *testing.T) {
 		}
 		_, _ = io.WriteString(w, `{"agents":[{"id":"a1","name":"reviewer","skills":["review"],"mcp_servers":[],"addons":[],"collections":["docs"],"network":"off","created":"2026-11-14T00:00:00Z","updated":"2026-11-14T00:00:00Z"}]}`)
 	})
-	agents, err := c.ListAgents(context.Background())
+	agents, err := c.ListAgents(context.Background(), "")
 	if err != nil {
 		t.Fatalf("ListAgents: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestCreateAgentSendsWriteBody(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, `{"id":"a2","name":"reviewer","model":"m1"}`)
 	})
-	out, err := c.CreateAgent(context.Background(), AgentWrite{Name: "reviewer", Model: "m1", Collections: []string{"docs"}})
+	out, err := c.CreateAgent(context.Background(), AgentWrite{Name: "reviewer", Model: "m1", Collections: []string{"docs"}}, "")
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
 	}
@@ -212,8 +212,87 @@ func TestDeleteAgentUsesIDPath(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.DeleteAgent(context.Background(), "a2"); err != nil {
+	if err := c.DeleteAgent(context.Background(), "a2", ""); err != nil {
 		t.Fatalf("DeleteAgent: %v", err)
+	}
+}
+
+func TestAgentOwnerScopeAddsUserID(t *testing.T) {
+	cases := []struct {
+		name     string
+		method   string
+		path     string
+		response string
+		call     func(*Client) error
+	}{
+		{
+			name:     "list",
+			method:   http.MethodGet,
+			path:     "/api/chats/agents",
+			response: `{"agents":[]}`,
+			call: func(c *Client) error {
+				_, err := c.ListAgents(context.Background(), "alice")
+				return err
+			},
+		},
+		{
+			name:     "get",
+			method:   http.MethodGet,
+			path:     "/api/chats/agents/a1",
+			response: `{"id":"a1","owner":"alice"}`,
+			call: func(c *Client) error {
+				_, err := c.GetAgent(context.Background(), "a1", "alice")
+				return err
+			},
+		},
+		{
+			name:     "create",
+			method:   http.MethodPost,
+			path:     "/api/chats/agents",
+			response: `{"id":"a2","owner":"alice"}`,
+			call: func(c *Client) error {
+				_, err := c.CreateAgent(context.Background(), AgentWrite{Name: "reviewer"}, "alice")
+				return err
+			},
+		},
+		{
+			name:     "update",
+			method:   http.MethodPut,
+			path:     "/api/chats/agents/a2",
+			response: `{"id":"a2","owner":"alice"}`,
+			call: func(c *Client) error {
+				_, err := c.UpdateAgent(context.Background(), "a2", AgentWrite{Name: "reviewer"}, "alice")
+				return err
+			},
+		},
+		{
+			name:   "delete",
+			method: http.MethodDelete,
+			path:   "/api/chats/agents/a2",
+			call: func(c *Client) error {
+				return c.DeleteAgent(context.Background(), "a2", "alice")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tc.method {
+					t.Errorf("method = %s, want %s", r.Method, tc.method)
+				}
+				if r.URL.Path != tc.path {
+					t.Errorf("path = %s, want %s", r.URL.Path, tc.path)
+				}
+				if got := r.URL.Query().Get("user_id"); got != "alice" {
+					t.Errorf("user_id = %q, want alice", got)
+				}
+				_, _ = io.WriteString(w, tc.response)
+			})
+			if err := tc.call(c); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+		})
 	}
 }
 

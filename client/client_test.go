@@ -50,7 +50,7 @@ func TestIsNotFound(t *testing.T) {
 		_, _ = io.WriteString(w, "not found")
 	})
 
-	_, err := c.GetAgent(context.Background(), "missing")
+	_, err := c.GetAgent(context.Background(), "missing", "")
 	if err == nil {
 		t.Fatal("expected an error for a 404 response")
 	}
@@ -76,7 +76,7 @@ func TestServerErrorIsNotNotFound(t *testing.T) {
 		_, _ = io.WriteString(w, "boom")
 	})
 
-	_, err := c.GetAgent(context.Background(), "bookkeeping")
+	_, err := c.GetAgent(context.Background(), "bookkeeping", "")
 	if err == nil {
 		t.Fatal("expected an error for a 500 response")
 	}
@@ -169,7 +169,7 @@ func TestListAgentsReadsChatsEnvelope(t *testing.T) {
 		}
 		_, _ = io.WriteString(w, `{"agents":[{"id":"a1","name":"reviewer","skills":["review"],"mcp_servers":[],"addons":[],"collections":["docs"],"network":"off","created":"2026-11-14T00:00:00Z","updated":"2026-11-14T00:00:00Z"}]}`)
 	})
-	agents, err := c.ListAgents(context.Background())
+	agents, err := c.ListAgents(context.Background(), "")
 	if err != nil {
 		t.Fatalf("ListAgents: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestCreateAgentSendsWriteBody(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_, _ = io.WriteString(w, `{"id":"a2","name":"reviewer","model":"m1"}`)
 	})
-	out, err := c.CreateAgent(context.Background(), AgentWrite{Name: "reviewer", Model: "m1", Collections: []string{"docs"}})
+	out, err := c.CreateAgent(context.Background(), AgentWrite{Name: "reviewer", Model: "m1", Collections: []string{"docs"}}, "")
 	if err != nil {
 		t.Fatalf("CreateAgent: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestDeleteAgentUsesIDPath(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	if err := c.DeleteAgent(context.Background(), "a2"); err != nil {
+	if err := c.DeleteAgent(context.Background(), "a2", ""); err != nil {
 		t.Fatalf("DeleteAgent: %v", err)
 	}
 }

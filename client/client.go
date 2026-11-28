@@ -193,51 +193,58 @@ type Agent struct {
 	Skills       []string     `json:"skills"`
 	Network      string       `json:"network"`
 	Folder       *AgentFolder `json:"folder,omitempty"`
+	Owner        string       `json:"owner,omitempty"`
 	Created      time.Time    `json:"created"`
 	Updated      time.Time    `json:"updated"`
 }
 
-// ListAgents returns the saved agents of the API key's user.
-func (c *Client) ListAgents(ctx context.Context) ([]Agent, error) {
+// ListAgents returns the saved agents of the API key's user. When userID is
+// set, an administrator-scoped request is made on behalf of that user.
+func (c *Client) ListAgents(ctx context.Context, userID string) ([]Agent, error) {
 	var resp struct {
 		Agents []Agent `json:"agents"`
 	}
-	if err := c.do(ctx, http.MethodGet, "/api/chats/agents", nil, &resp); err != nil {
+	path := projectPath("/api/chats/agents", userID)
+	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Agents, nil
 }
 
-// GetAgent returns one saved agent by ID.
-func (c *Client) GetAgent(ctx context.Context, id string) (*Agent, error) {
+// GetAgent returns one saved agent by ID. When userID is set, an
+// administrator-scoped request is made on behalf of that user.
+func (c *Client) GetAgent(ctx context.Context, id, userID string) (*Agent, error) {
 	var out Agent
-	if err := c.do(ctx, http.MethodGet, "/api/chats/agents/"+url.PathEscape(id), nil, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, projectPath("/api/chats/agents/"+url.PathEscape(id), userID), nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// CreateAgent saves a new agent.
-func (c *Client) CreateAgent(ctx context.Context, a AgentWrite) (*Agent, error) {
+// CreateAgent saves a new agent. When userID is set, an
+// administrator-scoped request is made on behalf of that user.
+func (c *Client) CreateAgent(ctx context.Context, a AgentWrite, userID string) (*Agent, error) {
 	var out Agent
-	if err := c.do(ctx, http.MethodPost, "/api/chats/agents", a, &out); err != nil {
+	if err := c.do(ctx, http.MethodPost, projectPath("/api/chats/agents", userID), a, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// UpdateAgent replaces the saved agent with the given ID.
-func (c *Client) UpdateAgent(ctx context.Context, id string, a AgentWrite) (*Agent, error) {
+// UpdateAgent replaces the saved agent with the given ID. When userID is set,
+// an administrator-scoped request is made on behalf of that user.
+func (c *Client) UpdateAgent(ctx context.Context, id string, a AgentWrite, userID string) (*Agent, error) {
 	var out Agent
-	if err := c.do(ctx, http.MethodPut, "/api/chats/agents/"+url.PathEscape(id), a, &out); err != nil {
+	if err := c.do(ctx, http.MethodPut, projectPath("/api/chats/agents/"+url.PathEscape(id), userID), a, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
 }
 
-// DeleteAgent deletes the saved agent with the given ID.
-func (c *Client) DeleteAgent(ctx context.Context, id string) error {
-	return c.do(ctx, http.MethodDelete, "/api/chats/agents/"+url.PathEscape(id), nil, nil)
+// DeleteAgent deletes the saved agent with the given ID. When userID is set,
+// an administrator-scoped request is made on behalf of that user.
+func (c *Client) DeleteAgent(ctx context.Context, id, userID string) error {
+	return c.do(ctx, http.MethodDelete, projectPath("/api/chats/agents/"+url.PathEscape(id), userID), nil, nil)
 }
 
 // Skill is one skill in the list, as LocalAI reports it.
@@ -673,7 +680,7 @@ func (c *Client) GetBackendJob(ctx context.Context, jobID string) (*BackendJob, 
 
 // Ping checks connectivity.
 func (c *Client) Ping(ctx context.Context) error {
-	_, err := c.ListAgents(ctx)
+	_, err := c.ListAgents(ctx, "")
 	return err
 }
 

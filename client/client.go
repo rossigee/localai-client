@@ -194,7 +194,6 @@ type Agent struct {
 	Skills       []string     `json:"skills"`
 	Network      string       `json:"network"`
 	Folder       *AgentFolder `json:"folder,omitempty"`
-	Owner        string       `json:"owner,omitempty"`
 	Created      time.Time    `json:"created"`
 	Updated      time.Time    `json:"updated"`
 }

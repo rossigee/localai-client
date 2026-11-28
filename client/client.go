@@ -210,7 +210,8 @@ func (c *Client) ListAgents(ctx context.Context, userID string) ([]Agent, error)
 	return resp.Agents, nil
 }
 
-// GetAgent returns one saved agent by ID.
+// GetAgent returns one saved agent by ID. When userID is set, an
+// administrator-scoped request is made on behalf of that user.
 func (c *Client) GetAgent(ctx context.Context, id, userID string) (*Agent, error) {
 	var out Agent
 	if err := c.do(ctx, http.MethodGet, projectPath("/api/chats/agents/"+url.PathEscape(id), userID), nil, &out); err != nil {
@@ -219,7 +220,8 @@ func (c *Client) GetAgent(ctx context.Context, id, userID string) (*Agent, error
 	return &out, nil
 }
 
-// CreateAgent saves a new agent.
+// CreateAgent saves a new agent. When userID is set, an
+// administrator-scoped request is made on behalf of that user.
 func (c *Client) CreateAgent(ctx context.Context, a AgentWrite, userID string) (*Agent, error) {
 	var out Agent
 	if err := c.do(ctx, http.MethodPost, projectPath("/api/chats/agents", userID), a, &out); err != nil {
@@ -228,7 +230,8 @@ func (c *Client) CreateAgent(ctx context.Context, a AgentWrite, userID string) (
 	return &out, nil
 }
 
-// UpdateAgent replaces the saved agent with the given ID.
+// UpdateAgent replaces the saved agent with the given ID. When userID is set,
+// an administrator-scoped request is made on behalf of that user.
 func (c *Client) UpdateAgent(ctx context.Context, id string, a AgentWrite, userID string) (*Agent, error) {
 	var out Agent
 	if err := c.do(ctx, http.MethodPut, projectPath("/api/chats/agents/"+url.PathEscape(id), userID), a, &out); err != nil {
@@ -237,7 +240,8 @@ func (c *Client) UpdateAgent(ctx context.Context, id string, a AgentWrite, userI
 	return &out, nil
 }
 
-// DeleteAgent deletes the saved agent with the given ID.
+// DeleteAgent deletes the saved agent with the given ID. When userID is set,
+// an administrator-scoped request is made on behalf of that user.
 func (c *Client) DeleteAgent(ctx context.Context, id, userID string) error {
 	return c.do(ctx, http.MethodDelete, projectPath("/api/chats/agents/"+url.PathEscape(id), userID), nil, nil)
 }

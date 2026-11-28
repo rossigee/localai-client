@@ -183,6 +183,7 @@ type AgentWrite struct {
 // every later call.
 type Agent struct {
 	ID           string       `json:"id"`
+	Owner        string       `json:"owner,omitempty"`
 	Name         string       `json:"name"`
 	Description  string       `json:"description"`
 	Instructions string       `json:"instructions"`
@@ -204,8 +205,7 @@ func (c *Client) ListAgents(ctx context.Context, userID string) ([]Agent, error)
 	var resp struct {
 		Agents []Agent `json:"agents"`
 	}
-	path := projectPath("/api/chats/agents", userID)
-	if err := c.do(ctx, http.MethodGet, path, nil, &resp); err != nil {
+	if err := c.do(ctx, http.MethodGet, projectPath("/api/chats/agents", userID), nil, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Agents, nil

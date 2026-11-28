@@ -217,6 +217,85 @@ func TestDeleteAgentUsesIDPath(t *testing.T) {
 	}
 }
 
+func TestAgentOwnerScopeAddsUserID(t *testing.T) {
+	cases := []struct {
+		name     string
+		method   string
+		path     string
+		response string
+		call     func(*Client) error
+	}{
+		{
+			name:     "list",
+			method:   http.MethodGet,
+			path:     "/api/chats/agents",
+			response: `{"agents":[]}`,
+			call: func(c *Client) error {
+				_, err := c.ListAgents(context.Background(), "alice")
+				return err
+			},
+		},
+		{
+			name:     "get",
+			method:   http.MethodGet,
+			path:     "/api/chats/agents/a1",
+			response: `{"id":"a1","owner":"alice"}`,
+			call: func(c *Client) error {
+				_, err := c.GetAgent(context.Background(), "a1", "alice")
+				return err
+			},
+		},
+		{
+			name:     "create",
+			method:   http.MethodPost,
+			path:     "/api/chats/agents",
+			response: `{"id":"a2","owner":"alice"}`,
+			call: func(c *Client) error {
+				_, err := c.CreateAgent(context.Background(), AgentWrite{Name: "reviewer"}, "alice")
+				return err
+			},
+		},
+		{
+			name:     "update",
+			method:   http.MethodPut,
+			path:     "/api/chats/agents/a2",
+			response: `{"id":"a2","owner":"alice"}`,
+			call: func(c *Client) error {
+				_, err := c.UpdateAgent(context.Background(), "a2", AgentWrite{Name: "reviewer"}, "alice")
+				return err
+			},
+		},
+		{
+			name:   "delete",
+			method: http.MethodDelete,
+			path:   "/api/chats/agents/a2",
+			call: func(c *Client) error {
+				return c.DeleteAgent(context.Background(), "a2", "alice")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != tc.method {
+					t.Errorf("method = %s, want %s", r.Method, tc.method)
+				}
+				if r.URL.Path != tc.path {
+					t.Errorf("path = %s, want %s", r.URL.Path, tc.path)
+				}
+				if got := r.URL.Query().Get("user_id"); got != "alice" {
+					t.Errorf("user_id = %q, want alice", got)
+				}
+				_, _ = io.WriteString(w, tc.response)
+			})
+			if err := tc.call(c); err != nil {
+				t.Fatalf("call: %v", err)
+			}
+		})
+	}
+}
+
 func TestGetSkillUsesLayerAndName(t *testing.T) {
 	c, _ := testClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/chats/skills/personal/review" {

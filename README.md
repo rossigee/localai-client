@@ -21,7 +21,7 @@ if err != nil {
     return err
 }
 
-agents, err := c.ListAgents(ctx)
+agents, err := c.ListAgents(ctx, "")
 ```
 
 `New` returns an error unless an API key or a full
@@ -49,7 +49,7 @@ body. Use `client.IsNotFound(err)` to distinguish a missing object from a
 failed request:
 
 ```go
-a, err := c.GetAgent(ctx, name)
+a, err := c.GetAgent(ctx, name, "")
 if client.IsNotFound(err) {
     // create it
 }
